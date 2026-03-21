@@ -30,8 +30,17 @@ func InstallUserPlayHandler(at string, appState *types.AppState) {
 		"playstationvita":     "PSVita",
 	}
 	playstationGenerator := func(id string, platform string) (*types.UserActivity, int) {
-		actTemplate := templateGenerator()
+		var ok bool
+		platform, ok = playstationPlatforms[platform]
+		if !ok {
+			return nil, 400
+		}
+
 		endpoint := appState.Config.PlatformPlaystationEndpoint
+		if platform != "PS3" {
+			endpoint = appState.Config.PlatformPlaystationMobileEndpoint
+		}
+
 		if len(id) <= 5 {
 			endpoint = appState.Config.PlatformOverlayEndpoint
 		}
@@ -68,11 +77,7 @@ func InstallUserPlayHandler(at string, appState *types.AppState) {
 			return nil, 404
 		}
 
-		var ok bool
-		platform, ok = playstationPlatforms[platform]
-		if !ok {
-			return nil, 400
-		}
+		actTemplate := templateGenerator()
 
 		actTemplate.GameAppID = id
 		actTemplate.Name = data.Name

@@ -14,8 +14,9 @@ type AppConfig struct {
 	ManagementToken string
 	StorageDir      string
 
-	PlatformOverlayEndpoint     string
-	PlatformPlaystationEndpoint string
+	PlatformOverlayEndpoint           string
+	PlatformPlaystationEndpoint       string
+	PlatformPlaystationMobileEndpoint string
 }
 
 func NewAppConfig() AppConfig {
@@ -26,8 +27,9 @@ func NewAppConfig() AppConfig {
 		ManagementToken: utils.Or(os.Getenv("MANAGEMENT_TOKEN"), "SuperSecretPassword"),
 		StorageDir:      utils.Or(os.Getenv("APP_STORAGE_DIR"), "store"),
 
-		PlatformOverlayEndpoint:     utils.Or(os.Getenv("PLATFORM_OVERLAY_ENDPOINT"), "https://raw.githubusercontent.com/RegularRabbit05/PluginRPCStatic/refs/heads/main/v1/tmdb/%s"),
-		PlatformPlaystationEndpoint: utils.Or(os.Getenv("PLATFORM_PLAYSTATION_ENDPOINT"), "https://api.serialstation.com/v1/tmdb/%s"),
+		PlatformOverlayEndpoint:           utils.Or(os.Getenv("PLATFORM_OVERLAY_ENDPOINT"), "https://raw.githubusercontent.com/RegularRabbit05/PluginRPCStatic/refs/heads/main/v1/tmdb/%s"),
+		PlatformPlaystationEndpoint:       utils.Or(os.Getenv("PLATFORM_PLAYSTATION_ENDPOINT"), "https://api.serialstation.com/v1/tmdb/%s"),
+		PlatformPlaystationMobileEndpoint: utils.Or(os.Getenv("PLATFORM_PLAYSTATION_ENDPOINT"), "https://api.serialstation.com/v1/title-ids/%s"),
 	}
 }
 
@@ -52,8 +54,16 @@ func (c *AppConfig) IsValid() error {
 		return errors.New("storage dir is empty")
 	}
 
+	if c.PlatformOverlayEndpoint == "" {
+		return errors.New("overlay endpoint is empty")
+	}
+
 	if c.PlatformPlaystationEndpoint == "" {
 		return errors.New("playstation endpoint is empty")
+	}
+
+	if c.PlatformPlaystationMobileEndpoint == "" {
+		return errors.New("playstation mobile endpoint is empty")
 	}
 
 	return nil
