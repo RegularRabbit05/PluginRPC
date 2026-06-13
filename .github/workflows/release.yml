@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -34,11 +34,12 @@ jobs:
           echo "tag_name=build-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${{ steps.meta.outputs.tag_name }}" \
-            --repo "${{ github.repository }}" \
-            --title "${{ steps.meta.outputs.date_name }}" \
-            --notes "Automated release for run #${{ github.run_number }}" \
-            ./PluginRPC
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          name: ${{ steps.meta.outputs.date_name }}
+          generate_release_notes: true
+          body: |
+            Automated release for run #${{ github.run_number }}
+            ${{ github.event.head_commit.message }}
+          files: ./PluginRPC
