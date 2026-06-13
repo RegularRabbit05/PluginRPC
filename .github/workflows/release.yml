@@ -22,10 +22,16 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build binary
+      - name: Build
         run: |
           go mod tidy
-          go build -o PluginRPC .
+          GOOS=linux GOARCH=amd64 go build -o PluginRPC .
+          GOOS=linux GOARCH=arm64 go build -o PluginRPC.linux-arm64 .
+          GOOS=linux GOARCH=ppc64le go build -o PluginRPC.linux-ppc64le .
+          GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -o PluginRPC.linux-mipsle .
+          GOOS=linux GOARCH=mips GOMIPS=softfloat go build -o PluginRPC.linux-mips .
+          GOOS=windows GOARCH=amd64 go build -o PluginRPC.exe .
+          GOOS=windows GOARCH=arm64 go build -o PluginRPC.windows-arm64.exe .
 
       - name: Compute release metadata
         id: meta
@@ -42,4 +48,11 @@ jobs:
           body: |
             Automated release for run #${{ github.run_number }}
             ${{ github.event.head_commit.message }}
-          files: ./PluginRPC
+          files: |
+            ./PluginRPC
+            ./PluginRPC.linux-arm64
+            ./PluginRPC.linux-ppc64le
+            ./PluginRPC.linux-mipsle
+            ./PluginRPC.linux-mips
+            ./PluginRPC.exe
+            ./PluginRPC.windows-arm64.exe
