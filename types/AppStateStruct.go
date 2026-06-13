@@ -106,3 +106,22 @@ func (s *AppState) Close() {
 
 	log.Println("App is going down")
 }
+
+func (s *AppState) SaveStorage() {
+	t := time.Now()
+	defer log.Printf("Finished saving storage in %s\n", time.Since(t))
+
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+	log.Println("Saving storage on shutdown")
+
+	for key, user := range s.UserStore {
+		func() {
+			user.StructMutex.Lock()
+			defer user.StructMutex.Unlock()
+			if err := user.SaveUserStorage(key, s, false); err != nil {
+				log.Printf("Failed to save user with id %s: %s", user.UserID, err)
+			}
+		}()
+	}
+}

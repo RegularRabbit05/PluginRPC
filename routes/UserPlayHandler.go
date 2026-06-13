@@ -3,8 +3,12 @@ package routes
 import (
 	"PluginRPC/types"
 	"PluginRPC/utils"
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
+	"time"
 
 	"net/http"
 
@@ -12,7 +16,7 @@ import (
 )
 
 func InstallUserPlayHandler(at string, appState *types.AppState) {
-	platformGenerator := map[string]func(string, string) (*types.UserActivity, int){}
+	platformGenerator := map[string]func(string, string, *http.Request) (*types.UserActivity, int){}
 	storageLoader := func(key string, user *types.User) {
 		appState.Mutex.Lock()
 		defer appState.Mutex.Unlock()
@@ -29,11 +33,11 @@ func InstallUserPlayHandler(at string, appState *types.AppState) {
 		"playstationportable": "PSP",
 		"playstationvita":     "PSVita",
 	}
-	playstationGenerator := func(id string, platform string) (*types.UserActivity, int) {
+	playstationGenerator := func(id string, platform string, _ *http.Request) (*types.UserActivity, int) {
 		var ok bool
 		platform, ok = playstationPlatforms[platform]
 		if !ok {
-			return nil, 400
+			return nil, http.StatusBadRequest
 		}
 
 		endpoint := appState.Config.PlatformPlaystationEndpoint
@@ -47,7 +51,7 @@ func InstallUserPlayHandler(at string, appState *types.AppState) {
 		requestUrl := fmt.Sprintf(endpoint, id)
 		request, err := http.NewRequest("GET", requestUrl, nil)
 		if err != nil {
-			return nil, 503
+			return nil, http.StatusServiceUnavailable
 		}
 
 		type S struct {
@@ -64,17 +68,17 @@ func InstallUserPlayHandler(at string, appState *types.AppState) {
 
 		resp, err := http.DefaultClient.Do(request)
 		if err != nil {
-			return nil, 503
+			return nil, http.StatusServiceUnavailable
 		}
 		defer resp.Body.Close()
 
 		var data T
 		if err = json.NewDecoder(resp.Body).Decode(&data); err != nil {
-			return nil, 500
+			return nil, http.StatusInternalServerError
 		}
 
 		if data.Name == "" {
-			return nil, 404
+			return nil, http.StatusNotFound
 		}
 
 		actTemplate := templateGenerator()
@@ -93,11 +97,82 @@ func InstallUserPlayHandler(at string, appState *types.AppState) {
 			}
 		}
 
-		return &actTemplate, 200
+		return &actTemplate, http.StatusOK
 	}
 	for platform := range playstationPlatforms {
 		platformGenerator[platform] = playstationGenerator
 	}
+
+	customGenerator := func(id string, platform string, r *http.Request) (*types.UserActivity, int) {
+		cStringToGoString := func(b []byte) string {
+			idx := bytes.IndexByte(b, 0)
+			if idx == -1 {
+				return string(b)
+			}
+			return string(b[:idx])
+		}
+
+		if r.Method != http.MethodPost {
+			return nil, http.StatusMethodNotAllowed
+		}
+
+		const apiVersion = 1
+		const v1BodySize = 836
+
+		if r.ContentLength > v1BodySize {
+			return nil, http.StatusBadRequest
+		}
+		body := make([]byte, r.ContentLength)
+		n, err := io.ReadFull(r.Body, body)
+		if err != nil || n != v1BodySize {
+			return nil, http.StatusLengthRequired
+		}
+
+		type ActivityApiV1 struct {
+			ApiVersion  uint32
+			Name        [64]byte
+			Description [128]byte
+			State       [128]byte
+			Image       [512]byte
+		}
+		var payload ActivityApiV1
+
+		err = binary.Read(bytes.NewReader(body), binary.LittleEndian, &payload)
+		if err != nil {
+			return nil, http.StatusExpectationFailed
+		}
+
+		if payload.ApiVersion != apiVersion {
+			return nil, http.StatusFailedDependency
+		}
+
+		img := cStringToGoString(payload.Image[:])
+		name := cStringToGoString(payload.Name[:])
+		details := cStringToGoString(payload.Description[:])
+		state := cStringToGoString(payload.State[:])
+
+		actTemplate := templateGenerator()
+
+		actTemplate.GameAppID = fmt.Sprint(time.Now().Unix())
+		if len(name) > 0 {
+			actTemplate.Name = name
+		}
+		if len(details) > 0 {
+			actTemplate.Details = details
+		}
+		if len(state) > 0 {
+			actTemplate.State = state
+		}
+		if len(img) > 0 {
+			actTemplate.Assets = &types.UserActivityAssets{
+				LargeImage: img,
+				LargeText:  "PluginRPC",
+			}
+		}
+
+		return &actTemplate, http.StatusOK
+	}
+	platformGenerator["custom"] = customGenerator
 
 	handler := func(w http.ResponseWriter, r *http.Request) int {
 		vars := mux.Vars(r)
@@ -132,12 +207,12 @@ func InstallUserPlayHandler(at string, appState *types.AppState) {
 			return http.StatusBadRequest
 		}
 
-		appPresence, code := generator(application, platform)
+		appPresence, code := generator(application, platform, r)
 		if appPresence == nil {
-			http.Error(w, fmt.Sprintf("Failed to fetch application data (%d)", code), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Failed to fetch application data (%d)", code), code)
 			user.DeleteActivity(appState.Config)
 			user.DiscordSync(appState.Config)
-			return http.StatusInternalServerError
+			return code
 		}
 
 		if !user.UpdateActivity(*appPresence, appState.Config) {

@@ -5,10 +5,10 @@ import (
 	"PluginRPC/tasks"
 	"PluginRPC/types"
 	"PluginRPC/utils"
+	"log"
 	"runtime"
 	"time"
 
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -48,6 +48,10 @@ func main() {
 
 	appCycle(&app)
 	runtime.Gosched()
+
+	time.Sleep(1 * time.Second)
+	app.SaveStorage()
+	runtime.Gosched()
 	log.Println("Bye!")
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 }

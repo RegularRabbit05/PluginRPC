@@ -147,6 +147,7 @@ func (u *User) UpdateActivity(activity UserActivity, config AppConfig) bool {
 
 	u.Activity = []UserActivity{*activity.ApplyDefaults(config)}
 	u.IsPlaying = true
+	u.AppNextRefresh = time.Now().Add(time.Minute * 5)
 	return u.DiscordSync(config)
 }
 
